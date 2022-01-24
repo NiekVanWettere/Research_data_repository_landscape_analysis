@@ -1,0 +1,177 @@
+---
+title: 'European repository landscape - visualizations'
+author: "Niek Van Wettere (https://orcid.org/0000-0002-9455-368X)"
+output:
+  html_notebook:
+    number_section: yes
+    toc: yes
+  html_document:
+    df_print: paged
+    toc: yes
+---
+<br>
+<br>
+
+# Introduction
+<br>
+In this document, the European repository landscape is examined using different visualizations. I focus on (1) repository types (e.g. institutional, discipline-specific etc.) and (2) usage statistics pertaining to repositories.
+
+
+```{r, message = FALSE}
+# load packages
+.libPaths("C:/R/library") # load R packages: the path has to be adjusted to where the packages are saved
+
+library(readxl, quietly = T); library(dplyr, quietly = T); library(ggplot2, quietly = T); library(stringr, quietly = T)
+```
+<br>
+The raw data is collected from re3data and Datacite. See below for the type of content.
+
+```{r}
+
+# read data from different source files
+data_re3data<-read_excel("Raw_data/20220114_output_re3data_2.xlsx") # from re3data
+head(data_re3data)
+
+data_DataCite_repo_names<-read_excel("Raw_data/20220112_output_DataCite_clients.xlsx") # from DataCite
+head(data_DataCite_repo_names)
+
+data_DataCite_usage<-read_excel("Raw_data/20220112_output_DataCite_depo_per_repo_2021.xlsx") # from DataCite
+colnames(data_DataCite_usage)[1] <- "repo_symbol"
+head(data_DataCite_usage)
+
+```
+<br>
+
+
+# Re3data: institutional vs. discipline-specific repositories
+<br>
+First, the number of repositories is plotted for the countries with at least ten repositories, based on information from re3data (2022/01/14). In this plot, one repository can belong to two or more countries.
+
+```{r}
+# plot_1
+
+repo_per_country <- as.data.frame(table(data_re3data$country))
+restricted_country_list<-repo_per_country[repo_per_country$Freq > 10, ]$Var1
+
+data_re3data_restricted<-filter(data_re3data, as.character(country) %in% as.character(restricted_country_list))
+
+table_re3data<-as.data.frame(table(as.character(data_re3data_restricted$country), as.character(data_re3data_restricted$type)))
+colnames(table_re3data)<-c("country", "type", "Freq")
+table_re3data<-filter(table_re3data, type != "")
+
+(repo_plot<-ggplot(table_re3data, aes(x=country, y=Freq, fill = type)) + geom_bar(stat = "identity") + theme_minimal() + coord_flip() + ggtitle("Number of repositories per country") + scale_fill_manual(values = c("disciplinary" = "#d53e4f", "disciplinary+institutional" = "#fc8d59", "institutional" = "#fee08b", "other" = "#762a83", "other+disciplinary" = "#8c510a", "other+disciplinary+institutional" = "#99d594", "other+institutional" = "#3288bd"))) 
+
+```
+
+
+<br>
+
+Now, the same type of graph is plotted, but this time, the relevant disciplines are also taken into account. 
+
+```{r fig.height=20, fig.width=15}
+# plot_2
+
+repo_per_country <- as.data.frame(table(data_re3data$country))
+restricted_country_list<-repo_per_country[repo_per_country$Freq > 50, ]$Var1
+
+data_re3data_restricted<-filter(data_re3data, as.character(country) %in% as.character(restricted_country_list))
+
+for (i in (1:nrow(data_re3data_restricted))) {  # eliminate doubles in "subject first" column
+
+  temporary<-str_split(data_re3data_restricted$subject_first[i], "\\+ ?") 
+  temporary_unique <- unique(temporary[[1]])
+  data_re3data_restricted$subject_first[i]<-paste(temporary_unique, collapse="+")
+}
+
+table_re3data_2<-as.data.frame(table(as.character(data_re3data_restricted$subject_first), as.character(data_re3data_restricted$country), as.character(data_re3data_restricted$type)))
+colnames(table_re3data_2)<-c("research_discipline", "country", "type", "Freq")
+table_re3data_2<-filter(table_re3data_2, type != "" & research_discipline != "NA" & Freq != 0 & research_discipline != "")
+
+(repo_plo_2<-ggplot(table_re3data_2, aes(x=research_discipline, y=Freq, fill = type)) + geom_bar(stat = "identity") + theme_minimal() + coord_flip() + ggtitle("Number of repositories per country and discipline") + facet_wrap(~ country, ncol = 1)) + scale_fill_manual(values = c("disciplinary" = "#d53e4f", "disciplinary+institutional" = "#fc8d59", "institutional" = "#fee08b", "other" = "#762a83", "other+disciplinary" = "#8c510a", "other+disciplinary+institutional" = "#99d594", "other+institutional" = "#3288bd")) 
+
+```
+<br>
+Since certain repositories occur more than once in the data, the plot below aims to ajust for this by joining multiple countries in these cases. Moreover, only repository types with a frequency higher than 5 are retained in this plot.
+
+```{r fig.height=13, fig.width=10}
+
+# some repositories occur more than once in the data
+
+unique_ids <- unique(data_re3data$ID)
+diff_repo <- length(data_re3data$ID) - length(unique_ids) # difference between total number of repo and total number of unique repo
+
+doubles <- list()  # locate all the doubles in the data
+doubles_without_first <- list()
+for (i in unique_ids) {
+  loc <- which(data_re3data$ID == i)
+  
+  if (length(loc) >= 2) {
+    doubles<-append(doubles, list(loc))
+    doubles_without_first <- append(doubles_without_first, list(loc[2:length(loc)]))
+  }}
+
+re3data_limited<-data_re3data
+re3data_limited$country <- as.character(re3data_limited$country)
+for (j in 1:length(doubles)) {
+  countries <- paste(as.character(data_re3data[doubles[[j]],]$country), collapse = "+")  # merge countries for same repository
+  
+  re3data_limited[doubles[[j]][1],4] <- countries
+  }
+
+to_be_removed <- unlist(doubles_without_first)
+re3data_limited <- re3data_limited[-to_be_removed, ] 
+
+disc_instit_data<-as.data.frame(table(as.character(re3data_limited$country), as.character(re3data_limited$type)))
+disc_instit_data_2<-filter(disc_instit_data, Freq != 0 & Var2 != "")
+colnames(disc_instit_data_2)<-c("country", "type", "Freq")
+
+disc_instit_data_3<-filter(disc_instit_data_2, Freq >= 5) # select only most frequent ones to plot
+ggplot(disc_instit_data_3, aes(x=country, y=Freq, color = type)) + geom_point(size = 5) + theme_minimal() + coord_flip() + ggtitle("Repository frequency per country and repository type") + scale_color_manual(values = c("disciplinary" = "#d53e4f", "disciplinary+institutional" = "#fc8d59", "institutional" = "#fee08b", "other" = "#762a83", "other+disciplinary" = "#8c510a"))
+
+```
+
+
+
+# Repositories according to usage statistics
+<br>
+Secondly, European research data repositories are ranked according to how much they were used in publication year 2021, based on metadata from DataCite. The first plot below ranks the repositories taking into account all types of submissions. 
+
+
+```{r fig.height=10, fig.width=10, warning = FALSE}
+
+DataCite_new <- merge(data_DataCite_usage, data_DataCite_repo_names, by = "repo_symbol", all = TRUE)
+DataCite_new_2 <- DataCite_new[order(-DataCite_new$total_depo_2021),]
+DataCite_new_3 <- DataCite_new_2[1:50,]
+
+require(scales)
+ggplot(DataCite_new_3, aes(x=reorder(repo_name, total_depo_2021), y=total_depo_2021)) + geom_point(size = 5) + theme_minimal() + coord_flip() + ggtitle("Number of submitted records for top-50 repositories") + xlab("Repositories") + ylab("Frequency of submissions in 2021") + scale_y_continuous(labels = scales::comma, limits = c(0,410000)) 
+```
+<br>
+
+The tabular data underlying the plot above:
+
+```{r}
+(DataCite_new_3)
+```
+<br>
+Next, the type of submission is restricted to "dataset" in the plot below.
+
+
+
+```{r fig.height=10, fig.width=10, warning = FALSE}
+DataCite_new_dataset_count <- filter(DataCite_new, count_datasets != "NA" & count_datasets != "error")
+DataCite_new_dataset_count$count_datasets <- as.numeric(DataCite_new_dataset_count$count_datasets)
+DataCite_new_dataset_count <- DataCite_new_dataset_count[order(-DataCite_new_dataset_count$count_datasets),]
+DataCite_new_dataset_count_2 <- DataCite_new_dataset_count[1:50,]
+
+require(scales)
+ggplot(DataCite_new_dataset_count_2, aes(x=reorder(repo_name, count_datasets), y=count_datasets)) + geom_point(size = 5) + theme_minimal() + coord_flip() + ggtitle("Number of submitted datasets for top-50 repositories") + xlab("Repositories") + ylab("Frequency of submissions in 2021") + scale_y_continuous(labels = scales::comma, limits = c(0,410000)) 
+
+```
+<br>
+The tabular data underlying the plot above:
+
+```{r}
+(DataCite_new_dataset_count_2)
+```
+
