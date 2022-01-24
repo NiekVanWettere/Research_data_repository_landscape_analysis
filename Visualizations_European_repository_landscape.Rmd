@@ -1,12 +1,12 @@
 ---
-title: 'European repository landscape - visualizations'
+title: 'European research data repository landscape - visualizations'
 author: "Niek Van Wettere (https://orcid.org/0000-0002-9455-368X)"
 output:
-  html_notebook:
-    number_section: yes
-    toc: yes
   html_document:
     df_print: paged
+    toc: yes
+  html_notebook:
+    number_section: yes
     toc: yes
 ---
 <br>
@@ -17,7 +17,7 @@ output:
 In this document, the European repository landscape is examined using different visualizations. I focus on (1) repository types (e.g. institutional, discipline-specific etc.) and (2) usage statistics pertaining to repositories.
 
 
-```{r, message = FALSE}
+```{r, message = FALSE, warning = FALSE}
 # load packages
 .libPaths("C:/R/library") # load R packages: the path has to be adjusted to where the packages are saved
 
